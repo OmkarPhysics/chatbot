@@ -3,6 +3,7 @@
 {% block content %}
   <div class="card p-4 mb-4">
     <h2>Login (JWT)</h2>
+    <div id="alert-box" class="alert alert-warning d-none" role="alert"></div>
     <div class="mb-3">
       <label class="form-label">Email</label>
       <input id="email" type="email" class="form-control" />
@@ -27,9 +28,22 @@
       document.getElementById("email").value = params.get("email");
     }
 
+    function showAlert(message, type = "warning") {
+      const alertBox = document.getElementById("alert-box");
+      alertBox.className = `alert alert-${type}`;
+      alertBox.innerHTML = message;
+      alertBox.classList.remove("d-none");
+    }
+
+    function hideAlert() {
+      document.getElementById("alert-box").classList.add("d-none");
+    }
+
     async function doLogin() {
+      hideAlert();
+      const email = document.getElementById("email").value;
       const body = {
-        email: document.getElementById("email").value,
+        email: email,
         password: document.getElementById("password").value,
       };
       const res = await api("/api/auth/login/", { method: "POST", body });
@@ -42,6 +56,13 @@
         }, 1000);
       } else {
         show("out", res.json ?? res.text);
+        // Check for common error messages and show helpful alerts
+        const errorStr = JSON.stringify(res.json ?? res.text).toLowerCase();
+        if (errorStr.includes("no active account") || errorStr.includes("no account")) {
+          showAlert(`Account not found. <a href="/register/" class="alert-link">Register here</a> to create a new account.`, "warning");
+        } else if (errorStr.includes("email is not verified")) {
+          showAlert(`Your email is not verified. <a href="/verify-email/?email=${encodeURIComponent(email)}" class="alert-link">Verify your email</a> to continue.`, "info");
+        }
       }
     }
 
