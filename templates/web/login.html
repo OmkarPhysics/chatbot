@@ -1,0 +1,63 @@
+{% extends "web/base.html" %}
+{% block title %}Login{% endblock %}
+{% block content %}
+  <div class="card p-4 mb-4">
+    <h2>Login (JWT)</h2>
+    <div class="mb-3">
+      <label class="form-label">Email</label>
+      <input id="email" type="email" class="form-control" />
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Password</label>
+      <input id="password" type="password" class="form-control" />
+    </div>
+    <div class="d-flex gap-2 mt-3">
+      <button type="button" class="btn btn-primary" onclick="doLogin()">Login</button>
+      <button type="button" class="btn btn-outline-secondary" onclick="doRefresh()">Refresh</button>
+      <button type="button" class="btn btn-outline-secondary" onclick="doLogout()">Logout (blacklist refresh)</button>
+    </div>
+    <pre id="out" class="mt-3">{}</pre>
+  </div>
+{% endblock %}
+{% block scripts %}
+  <script>
+    // Pre-fill email from URL query parameter
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("email")) {
+      document.getElementById("email").value = params.get("email");
+    }
+
+    async function doLogin() {
+      const body = {
+        email: document.getElementById("email").value,
+        password: document.getElementById("password").value,
+      };
+      const res = await api("/api/auth/login/", { method: "POST", body });
+      if (res.ok && res.json) {
+        setTokens(res.json);
+        show("out", res.json);
+        // Redirect to profile page after successful login
+        setTimeout(() => {
+          window.location.href = "/profile/";
+        }, 1000);
+      } else {
+        show("out", res.json ?? res.text);
+      }
+    }
+
+    async function doRefresh() {
+      const refresh = getRefresh();
+      const res = await api("/api/auth/token/refresh/", { method: "POST", body: { refresh } });
+      if (res.ok && res.json && res.json.access) localStorage.setItem("access", res.json.access);
+      show("out", res.json ?? res.text);
+    }
+
+    async function doLogout() {
+      const refresh = getRefresh();
+      const res = await api("/api/auth/logout/", { method: "POST", body: { refresh } });
+      if (res.ok) clearTokens();
+      show("out", res.json ?? res.text);
+    }
+  </script>
+{% endblock %}
+
