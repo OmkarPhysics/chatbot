@@ -157,3 +157,39 @@ class ResetPasswordSerializer(serializers.Serializer):
         user.save(update_fields=["password"])
         return user
 
+
+class ResendOTPSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def validate_email(self, value: str) -> str:
+        value = value.strip().lower()
+        try:
+            user = User.objects.get(email__iexact=value)
+        except User.DoesNotExist:
+            raise serializers.ValidationError("No user found for this email.")
+        if user.email_verified:
+            raise serializers.ValidationError("Email is already verified.")
+        return value
+
+    def create(self, validated_data):
+        email = validated_data["email"]
+        user = User.objects.get(email__iexact=email)
+
+        # Invalidate all existing unused OTPs for this user
+        EmailOTP.objects.filter(
+            user=user,
+            purpose=EmailOTP.Purpose.VERIFY_EMAIL,
+            used_at__isnull=True
+        ).update(used_at=timezone.now())
+
+        # Generate and send new OTP
+        otp = generate_numeric_otp(settings.EMAIL_OTP_LENGTH)
+        EmailOTP.objects.create(
+            user=user,
+            purpose=EmailOTP.Purpose.VERIFY_EMAIL,
+            code_hash=make_password(otp),
+            expires_at=timezone.now() + timedelta(seconds=settings.EMAIL_OTP_TTL_SECONDS),
+        )
+        send_verification_otp(email=user.email, otp=otp)
+        return user
+

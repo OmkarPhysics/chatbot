@@ -8,6 +8,7 @@ from apps.accounts import views
 urlpatterns = [
     path("register/", views.RegisterView.as_view(), name="register"),
     path("verify-email/", views.VerifyEmailView.as_view(), name="verify_email"),
+    path("resend-otp/", views.ResendOTPView.as_view(), name="resend_otp"),
     path("login/", views.LoginView.as_view(), name="login"),
     path("token/refresh/", views.RefreshView.as_view(), name="token_refresh"),
     path("logout/", views.LogoutView.as_view(), name="logout"),

@@ -4,8 +4,13 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load .env file
+load_dotenv(BASE_DIR / ".env")
 
 
 def env(name: str, default: str | None = None) -> str:
@@ -104,7 +109,6 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 # Email (SMTP)
-EMAIL_BACKEND = env("DJANGO_EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
 EMAIL_HOST = env("EMAIL_HOST", "")
 EMAIL_PORT = int(env("EMAIL_PORT", "587"))
 EMAIL_HOST_USER = env("EMAIL_HOST_USER", "")
@@ -112,6 +116,15 @@ EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = env("EMAIL_USE_TLS", "1") in {"1", "true", "True", "yes", "YES"}
 EMAIL_USE_SSL = env("EMAIL_USE_SSL", "0") in {"1", "true", "True", "yes", "YES"}
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", "no-reply@example.com")
+
+# Auto-detect email backend: use console if SMTP not configured
+_email_backend_env = env("DJANGO_EMAIL_BACKEND", "")
+if _email_backend_env:
+    EMAIL_BACKEND = _email_backend_env
+elif EMAIL_HOST:
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+else:
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 
 # DRF / JWT

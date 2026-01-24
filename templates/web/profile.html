@@ -2,49 +2,152 @@
 {% block title %}Profile{% endblock %}
 {% block content %}
   <div class="card p-4 mb-4">
-    <h2>Profile (me)</h2>
-    <p class="muted">Requires an access token in localStorage (login first).</p>
-    <div class="d-flex gap-2 flex-wrap">
-      <button type="button" class="btn btn-primary" onclick="doGet()">GET /api/profile/me/</button>
-      <button type="button" class="btn btn-outline-secondary" onclick="doPatch()">PATCH name</button>
-      <button type="button" class="btn btn-outline-secondary" onclick="doUpload()">PATCH avatar</button>
-      <button type="button" class="btn btn-outline-danger" onclick="doDelete()">DELETE account</button>
-    </div>
-    <div class="mb-3 mt-3">
+    <h2>Profile</h2>
+    <div id="alert-box" class="alert d-none" role="alert"></div>
+    <div class="mb-3">
       <label class="form-label">Name</label>
-      <input id="name" type="text" class="form-control" />
+      <input id="name" type="text" class="form-control" placeholder="Enter your name" />
     </div>
     <div class="mb-3">
       <label class="form-label">Avatar</label>
+      <div id="avatar-preview" class="mb-2"></div>
       <input id="avatar" type="file" accept="image/*" class="form-control" />
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <button type="button" id="btn-load" class="btn btn-outline-secondary" onclick="doLoad()">Load Profile</button>
+      <button type="button" id="btn-save" class="btn btn-primary" onclick="doSave()">Save Profile</button>
+      <button type="button" id="btn-delete" class="btn btn-outline-danger" onclick="doDelete()">Delete Account</button>
     </div>
     <pre id="out" class="mt-3">{}</pre>
   </div>
 {% endblock %}
 {% block scripts %}
   <script>
-    async function doGet() {
+    function showAlert(message, type = "warning") {
+      const alertBox = document.getElementById("alert-box");
+      alertBox.className = `alert alert-${type}`;
+      alertBox.innerHTML = message;
+      alertBox.classList.remove("d-none");
+    }
+
+    function hideAlert() {
+      document.getElementById("alert-box").classList.add("d-none");
+    }
+
+    function setLoading(loading) {
+      const btnSave = document.getElementById("btn-save");
+      const btnLoad = document.getElementById("btn-load");
+      if (loading) {
+        btnSave.disabled = true;
+        btnSave.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+        btnLoad.disabled = true;
+      } else {
+        btnSave.disabled = false;
+        btnSave.innerHTML = 'Save Profile';
+        btnLoad.disabled = false;
+      }
+    }
+
+    function showAvatarPreview(url) {
+      const preview = document.getElementById("avatar-preview");
+      if (url) {
+        preview.innerHTML = `<img src="${url}" alt="Avatar" style="max-width: 100px; max-height: 100px; border-radius: 8px;" />`;
+      } else {
+        preview.innerHTML = '<span class="text-muted">No avatar set</span>';
+      }
+    }
+
+    function handleAuthError() {
+      clearTokens();
+      showAlert('Your session has expired. <a href="/login/" class="alert-link">Please login again</a>.', "warning");
+    }
+
+    async function doLoad() {
+      hideAlert();
       const res = await api("/api/profile/me/", { method: "GET" });
+      if (res.status === 401) {
+        handleAuthError();
+        show("out", res.json ?? res.text);
+        return;
+      }
       show("out", res.json ?? res.text);
-      if (res.ok && res.json && res.json.name) document.getElementById("name").value = res.json.name;
+      if (res.ok && res.json) {
+        if (res.json.name) document.getElementById("name").value = res.json.name;
+        showAvatarPreview(res.json.avatar);
+        showAlert("Profile loaded successfully.", "success");
+      } else {
+        showAlert("Failed to load profile.", "danger");
+      }
     }
-    async function doPatch() {
+
+    async function doSave() {
+      hideAlert();
+      setLoading(true);
+
       const name = document.getElementById("name").value;
-      const res = await api("/api/profile/me/", { method: "PATCH", body: { name } });
-      show("out", res.json ?? res.text);
-    }
-    async function doUpload() {
       const file = document.getElementById("avatar").files[0];
-      const form = new FormData();
-      form.append("avatar", file);
-      const res = await api("/api/profile/me/", { method: "PATCH", body: form, isForm: true });
+
+      // Use FormData if there's a file, otherwise use JSON
+      let res;
+      if (file) {
+        const form = new FormData();
+        form.append("name", name);
+        form.append("avatar", file);
+        res = await api("/api/profile/me/", { method: "PATCH", body: form, isForm: true });
+      } else {
+        res = await api("/api/profile/me/", { method: "PATCH", body: { name } });
+      }
+
+      setLoading(false);
+
+      if (res.status === 401) {
+        handleAuthError();
+        show("out", res.json ?? res.text);
+        return;
+      }
+
       show("out", res.json ?? res.text);
+      if (res.ok) {
+        showAlert("Profile saved successfully!", "success");
+        // Update avatar preview if we got a new URL
+        if (res.json && res.json.avatar) {
+          showAvatarPreview(res.json.avatar);
+        }
+        // Clear file input after successful upload
+        document.getElementById("avatar").value = "";
+      } else {
+        const errorStr = JSON.stringify(res.json ?? res.text);
+        showAlert("Failed to save profile: " + errorStr, "danger");
+      }
     }
+
     async function doDelete() {
+      hideAlert();
+      if (!confirm("Are you sure you want to delete your account? This action cannot be undone.")) {
+        return;
+      }
       const res = await api("/api/profile/me/", { method: "DELETE" });
-      if (res.ok) clearTokens();
+      if (res.status === 401) {
+        handleAuthError();
+        show("out", res.json ?? res.text);
+        return;
+      }
       show("out", res.json ?? res.text);
+      if (res.ok) {
+        clearTokens();
+        showAlert('Account deleted. <a href="/register/" class="alert-link">Register a new account</a>.', "success");
+      } else {
+        showAlert("Failed to delete account.", "danger");
+      }
     }
+
+    // Load profile on page load if user has access token
+    document.addEventListener("DOMContentLoaded", function() {
+      if (getAccess()) {
+        doLoad();
+      } else {
+        showAlert('No access token found. <a href="/login/" class="alert-link">Please login first</a>.', "warning");
+      }
+    });
   </script>
 {% endblock %}
-

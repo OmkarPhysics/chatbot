@@ -106,3 +106,43 @@ class AuthFlowTests(APITestCase):
         res = self.client.post("/api/auth/login/", {"email": email, "password": new_password}, format="json")
         self.assertEqual(res.status_code, 200, res.data)
 
+    def test_resend_otp(self):
+        email = "carol@example.com"
+        password = "SecurePass123!"
+
+        # Register
+        res = self.client.post("/api/auth/register/", {"email": email, "password": password}, format="json")
+        self.assertEqual(res.status_code, 201, res.data)
+
+        # Get first OTP
+        first_otp = self._extract_first_otp()
+        initial_email_count = len(mail.outbox)
+
+        # Resend OTP
+        res = self.client.post("/api/auth/resend-otp/", {"email": email}, format="json")
+        self.assertEqual(res.status_code, 200, res.data)
+        self.assertEqual(res.data["email"], email)
+
+        # Should have received a new email
+        self.assertEqual(len(mail.outbox), initial_email_count + 1)
+
+        # Get new OTP
+        second_otp = self._extract_first_otp()
+
+        # Old OTP should no longer work (it was invalidated)
+        res = self.client.post("/api/auth/verify-email/", {"email": email, "otp": first_otp}, format="json")
+        self.assertEqual(res.status_code, 400, res.data)
+
+        # New OTP should work
+        res = self.client.post("/api/auth/verify-email/", {"email": email, "otp": second_otp}, format="json")
+        self.assertEqual(res.status_code, 200, res.data)
+
+        # Resend OTP should fail for verified user
+        res = self.client.post("/api/auth/resend-otp/", {"email": email}, format="json")
+        self.assertEqual(res.status_code, 400, res.data)
+
+    def test_resend_otp_nonexistent_user(self):
+        # Resend OTP for non-existent user should fail
+        res = self.client.post("/api/auth/resend-otp/", {"email": "nonexistent@example.com"}, format="json")
+        self.assertEqual(res.status_code, 400, res.data)
+

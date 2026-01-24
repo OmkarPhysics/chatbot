@@ -7,7 +7,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from apps.accounts.jwt import EmailTokenObtainPairSerializer
-from apps.accounts.serializers import ForgotPasswordSerializer, RegisterSerializer, ResetPasswordSerializer, VerifyEmailSerializer
+from apps.accounts.serializers import ForgotPasswordSerializer, RegisterSerializer, ResendOTPSerializer, ResetPasswordSerializer, VerifyEmailSerializer
 
 
 class RegisterView(APIView):
@@ -76,4 +76,17 @@ class ResetPasswordView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response({"detail": "Password reset successful."}, status=status.HTTP_200_OK)
+
+
+class ResendOTPView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = ResendOTPSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        return Response(
+            {"detail": "New OTP sent to email.", "email": user.email},
+            status=status.HTTP_200_OK,
+        )
 
